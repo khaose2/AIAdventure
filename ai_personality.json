@@ -1,0 +1,110 @@
+import json
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from fastapi import FastAPI, Request
+import uvicorn
+import os
+
+# Initialize AI components
+model_name = "deepseek-ai/DeepSeek-R1"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", torch_dtype=torch.float16)
+
+app = FastAPI()
+
+# File paths for saving world and personality state
+WORLD_STATE_FILE = "world_state.json"
+PERSONALITY_FILE = "ai_personality.json"
+
+# Utility function to ensure file exists with default data
+def ensure_file_exists(file_path, default_data):
+    if not os.path.exists(file_path):
+        with open(file_path, "w") as file:
+            json.dump(default_data, file, indent=4)
+
+# Load or initialize world state
+def load_world_state():
+    ensure_file_exists(WORLD_STATE_FILE, {"story_state": [], "players": {}})
+    with open(WORLD_STATE_FILE, "r") as file:
+        return json.load(file)
+
+# Save world state
+def save_world_state(state):
+    with open(WORLD_STATE_FILE, "w") as file:
+        json.dump(state, file, indent=4)
+
+# Load or initialize personality
+def load_personality():
+    ensure_file_exists(PERSONALITY_FILE, {
+        "name": "GameMaster-AI",
+        "traits": ["logical", "creative storyteller", "impartial judge"],
+        "style": "engaging, descriptive, and encouraging",
+        "role": "guide and challenge players through a dynamic and immersive adventure"
+    })
+    with open(PERSONALITY_FILE, "r") as file:
+        return json.load(file)
+
+# Save personality
+def save_personality(personality):
+    with open(PERSONALITY_FILE, "w") as file:
+        json.dump(personality, file, indent=4)
+
+# Initialize world state and personality
+world_state = load_world_state()
+personality = load_personality()
+
+def personalize_prompt(prompt):
+    """Modify the prompt based on the personality data."""
+    personality_intro = (
+        f"You are {personality['name']}, a {personality['role']} with the following traits: "
+        f"{', '.join(personality['traits'])}. Your style is {personality['style']}. "
+        "Provide guidance, obstacles, and narrative twists to create an immersive experience."
+    )
+    return f"{personality_intro}\n\n{prompt}"
+
+def generate_ai_response(prompt):
+    """Generate a response from the AI using the personalized prompt."""
+    prompt = personalize_prompt(prompt)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    outputs = model.generate(**inputs, max_length=300)
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return response
+
+@app.post("/gm_action/")
+async def gm_action(request: Request):
+    """Generate a GM-style response based on the game's current state."""
+    data = await request.json()
+    player_id = data.get("player_id", "unknown")
+    player_action = data.get("player_action", "")
+
+    # Update or create player state
+    if player_id not in world_state["players"]:
+        world_state["players"][player_id] = {"actions": []}
+    world_state["players"][player_id]["actions"].append(player_action)
+
+    # Create a prompt combining the story state and player action
+    story_context = "\n".join(world_state["story_state"][-5:])[-1000:] if world_state["story_state"] else ""
+    prompt = (
+        f"{story_context}\n\nThe player has taken the following action: {player_action}\n"
+        "As the GM, respond with a narrative that advances the story, including any new challenges or opportunities."
+    )
+
+    response = generate_ai_response(prompt)
+
+    # Update the story state with the new response
+    world_state["story_state"].append(response)
+    save_world_state(world_state)
+
+    return {"gm_response": response.strip()}
+
+@app.post("/update_personality/")
+async def update_personality(request: Request):
+    """Update the AI personality dynamically."""
+    new_traits = await request.json()
+    personality.update(new_traits)
+    save_personality(personality)
+    return {"status": "Personality updated successfully.", "current_personality": personality}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8002)
