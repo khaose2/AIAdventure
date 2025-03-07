@@ -1,0 +1,10 @@
+2025-02-04 04:12:58,018 [INFO] CUDA not available. Falling back to CPU.
+2025-02-04 04:12:58,018 [INFO] Loading model and tokenizer...
+2025-02-04 04:13:00,381 [INFO] Model loaded and set to eval mode.
+2025-02-04 04:13:00,972 [INFO] Model successfully compiled with torch.compile.
+2025-02-04 04:17:43,160 [INFO] CUDA is available. Using GPU: NVIDIA GeForce RTX 3080
+2025-02-04 04:17:43,161 [INFO] Loading model and tokenizer...
+2025-02-04 04:17:45,405 [INFO] We will use 90% of the memory on device 0 for storing the model, and 10% for the buffer to avoid OOM. You can set `max_memory` in to a higher value to use more memory (at your own risk).
+2025-02-04 04:17:48,577 [WARNING] Some parameters are on the meta device because they were offloaded to the cpu.
+2025-02-04 04:17:48,586 [INFO] Model loaded and set to eval mode.
+2025-02-04 04:17:49,603 [INFO] Model successfully compiled with torch.compile.
